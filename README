@@ -1,0 +1,75 @@
+# xls2txt: converting spreadsheets to text
+
+## Purpose
+
+`xls2txt` and `xsl2csv` allow converting spreadsheet files to text for
+compatibility with terminals and command-line utilities (e.g. diff or
+less). Despite the name, they should work with both excel (xls, xlsx
+or xlsb) and OpenDocument (ods) files.
+
+The two executables provided by this package differ only in their
+default configuration: `xls2txt` and `xls2csv` both return one row per
+line, however `xls2txt` separates cells with a TAB character by
+default while `xls2csv` uses a comma (`,`): the tab separator seems
+like a better default for readability and compatibility with various
+unix utilities.
+
+## Interface
+
+Both utilities have the same parameter and options, differing only by
+their default:
+
+* `PATH` is a mandatory path to a spreadsheet file to convert.
+* `--sheet` (`-s`) is the sheet to convert. By default, the first
+  sheet is converted.
+
+  `sheet` can be either the *name* of a sheet, or its position in the
+  workbook (starting at 1, though 0 will be treated as 1).
+* `--record-separator` (`--rs`, `-r`) is the separator used between
+  sheet rows, it defaults to a unix newline for both utilities.
+* `--field-separator` (`--fs`, `f`) is the separator used between
+  sheet cells, it defaults to a TAB character for `xsl2txt` and a
+  COMMA for `xls2csv`.
+* the converted data is written to stdout
+* returns `0` if the entire conversion succeeded, `1` otherwise:
+
+    - no input file was provided
+    - the input file was not found or not recognized as a valid
+      spreadsheet file
+    - the provided record or field separator is invalid (it must be a
+      single ascii character)
+    - the specified sheet was not found
+    - an error was found in one of the sheet cells
+    - an problem occurred while writing data to stdout
+
+## Recipes
+
+### git text conversion
+
+This allows viewing textual diffs of spreadsheet files using `git log`
+or `git diff` rather than get an unhelpful "binary files differ":
+
+1. create a `$HOME/.gitattributes` file, or set an arbitrary file as
+   the attributes file (`git config --global core.attributesFile
+   <filename>`)
+2. in that file, associate the relevant spreadsheet extensions with
+   the proper category (hunk-header):
+
+        *.ods diff=spreadsheet
+        *.xls diff=spreadsheet
+        *.xlsx diff=spreadsheet
+        *.xlsb diff=spreadsheet
+
+3. set `xls2txt` (or `xls2csv`), possibly configured as you desire, as
+   the diff text converter:
+
+        git config --global diff.spreadsheet.textconv xls2txt
+
+## Thanks
+
+* [calamine](https://github.com/tafia/calamine) makes getting data out
+  of spreadsheet files a breeze
+* [rust-csv](https://github.com/BurntSushi/rust-csv) is not strictly
+  necessary as generating value-separated data is fairly easy (as
+  opposed to consuming it), but it provides confidence that the output
+  will be properly quoted / escaped when necessary

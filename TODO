@@ -1,0 +1,7 @@
+* convert to a proper crate installable via cargo install
+* allow stdin input, not sure that's possible given open_workbook_auto
+  takes a path (or write to a temp file then delete the tempfile but
+  that's gross)
+* add readme to explain use cases
+ - as diff filter
+ - ? as less filter ?
