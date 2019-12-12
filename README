@@ -65,6 +65,13 @@ or `git diff` rather than get an unhelpful "binary files differ":
 
         git config --global diff.spreadsheet.textconv xls2txt
 
+## Changelog
+
+### 1.0.1
+
+* Switch back to calamine proper as 0.16.1 guarantees sheets are
+  in-order
+
 ## Thanks
 
 * [calamine](https://github.com/tafia/calamine) makes getting data out
