@@ -67,6 +67,10 @@ or `git diff` rather than get an unhelpful "binary files differ":
 
 ## Changelog
 
+### 1.0.2
+
+* Update dependencies to latest versions, bump edition
+
 ### 1.0.1
 
 * Switch back to calamine proper as 0.16.1 guarantees sheets are

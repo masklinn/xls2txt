@@ -3,15 +3,16 @@
 #![allow(clippy::similar_names)]
 
 use calamine::{open_workbook_auto, DataType, Reader};
+use clap::{builder::Arg, command};
 use std::error::Error;
-use std::fmt::{self, Display, Debug, Formatter, Write};
+use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::io;
-use clap::{App, Arg, crate_name, crate_version};
-use std::convert::TryFrom;
 
 pub enum Errors {
     InvalidSeparator,
-    Empty, NotFound(String),
+    MissingSeparator,
+    Empty,
+    NotFound(String),
     Csv(csv::Error),
     Spreadsheet(calamine::Error),
     CellError(calamine::CellErrorType),
@@ -29,11 +30,15 @@ impl Display for Errors {
         use Errors::*;
         match self {
             Empty => write!(fmt, "Empty spreadsheet"),
-            NotFound(ref s) => write!(fmt, "Could not find sheet \"{}\" in spreadsheet", s),
-            InvalidSeparator => write!(fmt, "A provided separator is invalid, separators need to be a single ascii chacter"),
-            Csv(ref e) => write!(fmt, "{}", e),
-            Spreadsheet(ref e) => write!(fmt, "{}", e),
-            CellError(ref e) => write!(fmt, "Error found in cell ({:?})", e)
+            NotFound(s) => write!(fmt, "Could not find sheet {:?} in spreadsheet", s),
+            InvalidSeparator => write!(
+                fmt,
+                "A provided separator is invalid, separators need to be a single ascii chacter"
+            ),
+            MissingSeparator => write!(fmt, "No separator found"),
+            Csv(e) => write!(fmt, "{}", e),
+            Spreadsheet(e) => write!(fmt, "{}", e),
+            CellError(e) => write!(fmt, "Error found in cell ({:?})", e),
         }
     }
 }
@@ -49,48 +54,76 @@ impl From<calamine::Error> for Errors {
 }
 
 fn separator_to_byte(s: &str) -> Result<u8, Errors> {
-    s.chars().next()
-        .ok_or(Errors::InvalidSeparator)
-        .and_then(|c| u8::try_from(c as u32).map_err(|_| Errors::InvalidSeparator))
+    let c = s.chars().next().ok_or(Errors::InvalidSeparator)?;
+    (c as u32).try_into().map_err(|_| Errors::InvalidSeparator)
 }
-pub fn run(n: &'static str, default_rs: &'static str, default_fs: &'static str) -> Result<(), Errors> {
 
-    let matches = App::new(crate_name!())
-        .version(crate_version!())
+pub fn run(
+    n: &'static str,
+    default_rs: &'static str,
+    default_fs: &'static str,
+) -> Result<(), Errors> {
+    let help = format!(
+        "\
+Converts the first sheet of the spreadsheet at PATH (or <sheet> if \
+requested) to {n} sent to stdout.
+
+Should be able to convert from (and automatically guess between) XLS, XLSX, XLSB and ODS."
+    );
+    let matches = command!()
         .about("Converts spreadsheets to text")
-        .long_about(&format!("Converts the first sheet of the spreadsheet at PATH (or <sheet> if \
-requested) to {} sent to stdout.
-
-Should be able to convert from (and automatically guess between) XLS, XLSX, XLSB and ODS.", n) as &str)
-        .arg(Arg::with_name("PATH").help("Spreadsheet file path").required(true))
-        .arg(Arg::with_name("sheet")
-             .short("s").long("sheet")
-             .default_value("1")
-             .help("Name or index (1 is first) of the sheet to convert")
+        .long_about(&help)
+        .arg(
+            Arg::new("PATH")
+                .help("Spreadsheet file path")
+                .required(true),
         )
-        .arg(Arg::with_name("RS")
-             .short("r").long("rs").long("record-separator")
-             .takes_value(true)
-             .help("Record separator (a single character)")
+        .arg(
+            Arg::new("sheet")
+                .short('s')
+                .long("sheet")
+                .default_value("1")
+                .help("Name or index (1 is first) of the sheet to convert"),
         )
-        .arg(Arg::with_name("FS")
-             .short("f").long("fs").long("field-separator")
-             .takes_value(true)
-             .help("Field separator (a single character)")
+        .arg(
+            Arg::new("RS")
+                .short('r')
+                .long("rs")
+                .long("record-separator")
+                .default_value(default_rs)
+                .help("Record separator (a single character)"),
+        )
+        .arg(
+            Arg::new("FS")
+                .short('f')
+                .long("fs")
+                .long("field-separator")
+                .default_value(default_fs)
+                .help("Field separator (a single character)"),
         )
         .get_matches();
 
-    let rs = separator_to_byte(matches.value_of("RS").unwrap_or(default_rs))?;
-    let fs = separator_to_byte(matches.value_of("FS").unwrap_or(default_fs))?;
+    let rs = separator_to_byte(
+        matches
+            .get_one::<String>("RS")
+            .ok_or(Errors::MissingSeparator)?,
+    )?;
+    let fs = separator_to_byte(
+        matches
+            .get_one::<String>("FS")
+            .ok_or(Errors::MissingSeparator)?,
+    )?;
 
-    let mut workbook = open_workbook_auto(matches.value_of("PATH").unwrap())?;
+    let mut workbook = open_workbook_auto(matches.get_one::<String>("PATH").unwrap())?;
 
-    let sheet = matches.value_of("sheet").unwrap_or("1");
+    let sheet = matches.get_one::<String>("sheet").map_or("1", |s| &**s);
     // if sheet is a number get corresponding sheet in list
     let name = String::from(
-        sheet.parse::<usize>().ok()
+        sheet
+            .parse::<usize>()
+            .ok()
             .and_then(|n| workbook.sheet_names().get(n.saturating_sub(1)))
-            .map_or(sheet, |s| s as &str)
+            .map_or(sheet, |s| s as &str),
     );
 
     let range = if let Some(Ok(r)) = workbook.worksheet_range(&name) {
@@ -105,19 +138,21 @@ Should be able to convert from (and automatically guess between) XLS, XLSX, XLSB
         .delimiter(fs)
         .from_writer(stdout.lock());
 
-    let mut contents = vec![String::new();range.width()];
+    let mut contents = vec![String::new(); range.width()];
     for row in range.rows() {
         for (c, cell) in row.iter().zip(contents.iter_mut()) {
             cell.clear();
-            match *c {
-                DataType::Error(ref e) => return Err(Errors::CellError(e.clone())),
+            match c {
+                DataType::Error(e) => return Err(Errors::CellError(e.clone())),
                 // don't go through fmt for strings
-                DataType::String(ref s) => cell.push_str(s),
-                ref rest => write!(cell, "{}", rest).expect("formatting basic types to a string should never fail"),
+                DataType::String(s) => cell.push_str(s),
+                rest => write!(cell, "{}", rest)
+                    .expect("formatting basic types to a string should never fail"),
             };
         }
         out.write_record(&contents)?;
     }
+    out.flush().unwrap();
 
     Ok(())
 }
