@@ -20,3 +20,4 @@ keywords = ["xls2csv", "xls2txt", "xls", "ods", "csv"] # up to 5
 calamine = "0.19.1"
 csv = "1.1"
 clap = { version = "4.0", features = ["cargo"] }
+guard = "0.5.1"
