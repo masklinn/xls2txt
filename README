@@ -7,12 +7,16 @@ compatibility with terminals and command-line utilities (e.g. diff or
 less). Despite the name, they should work with both excel (xls, xlsx
 or xlsb) and OpenDocument (ods) files.
 
-The two executables provided by this package differ only in their
-default configuration: `xls2txt` and `xls2csv` both return one row per
-line, however `xls2txt` separates cells with a TAB character by
-default while `xls2csv` uses a comma (`,`): the tab separator seems
-like a better default for readability and compatibility with various
-unix utilities.
+The two executables provided by this package broadly work the same
+way, returning one line per row separated by a unix newline (`\n`) and
+quoting field values if necessary, they differ only in their *default*
+field (cell) separator:
+
+- `xls2txt` separates cells with a TAB character
+- `xls2csv` uses a comma (`,`)
+
+The tab separator seems like a better default for readability and
+compatibility with various unix utilities.
 
 ## Interface
 
@@ -30,7 +34,19 @@ their default:
 * `--field-separator` (`--fs`, `f`) is the separator used between
   sheet cells, it defaults to a TAB character for `xsl2txt` and a
   COMMA for `xls2csv`.
+* `--formula` specifies the *formula display mode*:
+  - by default (`cached-value`), formulas are not displayed, if a
+    formula cell has a cached value that is displayed, otherwise the
+    cell is empty
+  - `if-empty` will show the cached value if there is one, but will
+    show the formula if there isn't one
+  - `always` will always display the formula of a formula cell, never
+    the cached value
 * the converted data is written to stdout
+* error messages can be written to stdout, including on success
+  e.g. if an error occurs while parsing formulas and the formula mode
+  is not the default, an error will be signaled then the formula mode
+  will be reset to default
 * returns `0` if the entire conversion succeeded, `1` otherwise:
 
     - no input file was provided
@@ -66,6 +82,11 @@ or `git diff` rather than get an unhelpful "binary files differ":
         git config --global diff.spreadsheet.textconv xls2txt
 
 ## Changelog
+
+* Add support for displaying formulas
+
+  - if there is no cached value for a formula cell
+  - or instead of the cached value
 
 ### 1.0.2
 
