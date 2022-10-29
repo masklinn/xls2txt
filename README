@@ -83,6 +83,8 @@ or `git diff` rather than get an unhelpful "binary files differ":
 
 ## Changelog
 
+### 1.1.0
+
 * Add support for displaying formulas
 
   - if there is no cached value for a formula cell

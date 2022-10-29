@@ -2,7 +2,7 @@
 name = "xls2txt"
 description = "Command-line utility to convert stylesheets (ODS or excel) to text"
 readme = "README"
-version = "1.0.2"
+version = "1.1.0"
 authors = ["Masklinn <masklinn@masklinn.net>"]
 license = "Apache-2.0"
 
