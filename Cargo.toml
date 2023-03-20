@@ -18,6 +18,6 @@ keywords = ["xls2csv", "xls2txt", "xls", "ods", "csv"] # up to 5
 
 [dependencies]
 calamine = "0.19.1"
-csv = "1.1"
-clap = { version = "4.0", features = ["cargo", "derive"] }
+csv = "1.2"
+clap = { version = "4.1", features = ["cargo", "derive"] }
 guard = "0.5.1"
