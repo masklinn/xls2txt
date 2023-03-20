@@ -1,12 +1,12 @@
 #![deny(clippy::all)]
-#![allow(clippy::similar_names)]
 
 use calamine::{open_workbook_auto, DataType, Reader};
-use clap::{builder::Arg, command};
+use clap::{CommandFactory, FromArgMatches, Parser, ValueEnum};
 use guard::guard;
 use std::error::Error;
 use std::fmt::{self, Debug, Display, Formatter, Write};
 use std::io;
+use std::path::PathBuf;
 
 pub enum Errors {
     InvalidSeparator,
@@ -30,15 +30,15 @@ impl Display for Errors {
         use Errors::*;
         match self {
             Empty => write!(fmt, "Empty spreadsheet"),
-            NotFound(s) => write!(fmt, "Could not find sheet {:?} in spreadsheet", s),
+            NotFound(s) => write!(fmt, "Could not find sheet {s:?} in spreadsheet"),
             InvalidSeparator => write!(
                 fmt,
                 "A provided separator is invalid, separators need to be a single ascii chacter"
             ),
             MissingSeparator => write!(fmt, "No separator found"),
-            Csv(e) => write!(fmt, "{}", e),
-            Spreadsheet(e) => write!(fmt, "{}", e),
-            CellError(e) => write!(fmt, "Error found in cell ({:?})", e),
+            Csv(e) => write!(fmt, "{e}"),
+            Spreadsheet(e) => write!(fmt, "{e}"),
+            CellError(e) => write!(fmt, "Error found in cell ({e:?})"),
         }
     }
 }
@@ -58,25 +58,36 @@ fn separator_to_byte(s: &str) -> Result<u8, Errors> {
     (c as u32).try_into().map_err(|_| Errors::InvalidSeparator)
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 enum FormulaMode {
+    /// never show formula, always display cached value, even if empty
     CachedValue,
+    /// show formula if cached value is empty or absent
     IfEmpty,
+    /// always show formula for formula cells (ignore cached values)
     Always,
-    // Evaluate
+    // TODO: evaluate formulas
+    // Evaluate,
 }
-impl clap::ValueEnum for FormulaMode {
-    fn value_variants<'a>() -> &'a [Self] {
-        &[Self::CachedValue, Self::IfEmpty, Self::Always]
-    }
 
-    fn to_possible_value<'a>(&self) -> Option<clap::builder::PossibleValue> {
-        match self {
-            Self::CachedValue => Some(clap::builder::PossibleValue::new("cached-value")),
-            Self::IfEmpty => Some(clap::builder::PossibleValue::new("if-empty")),
-            Self::Always => Some(clap::builder::PossibleValue::new("always")),
-        }
-    }
+#[derive(Parser, Debug)]
+#[command(author, version)]
+#[command(about = "Converts spreadsheets to text")]
+struct App {
+    /// Spreadsheet file path
+    path: PathBuf,
+    /// Name or index (1 is first) of the sheet to convert
+    #[arg(short, long, default_value = "1")]
+    sheet: String,
+    /// Record separator (a single character)
+    #[arg(short, long)]
+    record_separator: String,
+    /// Field separator (a single character)
+    #[arg(short, long)]
+    field_separator: String,
+    /// Whether and when to show formulas
+    #[arg(long, value_enum, default_value_t = FormulaMode::CachedValue)]
+    formula: FormulaMode,
 }
 
 pub fn run(
@@ -84,82 +95,32 @@ pub fn run(
     default_rs: &'static str,
     default_fs: &'static str,
 ) -> Result<(), Errors> {
-    let help = format!(
-        "\
+    let app = App::from_arg_matches(
+        &App::command()
+            .long_about(&format!(
+                "\
 Converts the first sheet of the spreadsheet at PATH (or <sheet> if \
 requested) to {n} sent to stdout.
 
-Should be able to convert from (and automatically guess between) XLS, XLSX, XLSB and ODS."
-    );
-    let matches = command!()
-        .about("Converts spreadsheets to text")
-        .long_about(&help)
-        .arg(
-            Arg::new("PATH")
-                .help("Spreadsheet file path")
-                .required(true),
-        )
-        .arg(
-            Arg::new("sheet")
-                .short('s')
-                .long("sheet")
-                .default_value("1")
-                .help("Name or index (1 is first) of the sheet to convert"),
-        )
-        .arg(
-            Arg::new("RS")
-                .short('r')
-                .long("rs")
-                .long("record-separator")
-                .default_value(default_rs)
-                .help("Record separator (a single character)"),
-        )
-        .arg(
-            Arg::new("FS")
-                .short('f')
-                .long("fs")
-                .long("field-separator")
-                .default_value(default_fs)
-                .help("Field separator (a single character)"),
-        )
-        .arg(
-            Arg::new("formula-mode")
-                .long("formula")
-                .value_parser(clap::builder::EnumValueParser::<FormulaMode>::new())
-                .default_value("cached-value")
-                .help(
-                    "\
-Whether and when to show formulas
+Should be able to convert from (and automatically guess between) \
+XLS, XLSX, XLSB and ODS."
+            ))
+            .mut_arg("record_separator", |rs| rs.default_value(default_rs))
+            .mut_arg("field_separator", |fs| fs.default_value(default_fs))
+            .get_matches(),
+    )
+    .unwrap();
 
-- cached-value: never show formula, always display cached value, even if empty
-- if-empty: show formula if cached-value is empty or absent
-- always: always show formula for formula cells (ignore cached value)\
-",
-                ),
-        )
-        .get_matches();
+    let mut workbook = open_workbook_auto(app.path)?;
 
-    let rs = separator_to_byte(
-        matches
-            .get_one::<String>("RS")
-            .ok_or(Errors::MissingSeparator)?,
-    )?;
-    let fs = separator_to_byte(
-        matches
-            .get_one::<String>("FS")
-            .ok_or(Errors::MissingSeparator)?,
-    )?;
-
-    let mut workbook = open_workbook_auto(matches.get_one::<String>("PATH").unwrap())?;
-
-    let sheet = matches.get_one::<String>("sheet").map_or("1", |s| &**s);
-    // if sheet is a number get corresponding sheet in list
+    // if sheet is a number get corresponding sheet in list, otherwise
+    // assume it's a sheet name
     let name = String::from(
-        sheet
+        app.sheet
             .parse::<usize>()
             .ok()
             .and_then(|n| workbook.sheet_names().get(n.saturating_sub(1)))
-            .map_or(sheet, |s| s as &str),
+            .map_or(&app.sheet, |s| s),
     );
 
     guard!(let Some(Ok(range)) = workbook.worksheet_range(&name) else {
@@ -169,12 +130,11 @@ Whether and when to show formulas
         return Ok(());
     });
 
-    let formula_mode = *matches.get_one::<FormulaMode>("formula-mode").unwrap();
     let wb = workbook
         .worksheet_formula(&name)
         .expect("we know the sheet exists");
     let formatter: Box<dyn Fn(u32, u32, DataType) -> DataType> = match wb.as_ref() {
-        Ok(f) => match formula_mode {
+        Ok(f) => match app.formula {
             FormulaMode::CachedValue => Box::new(|_, _, cell| cell),
             FormulaMode::IfEmpty => Box::new(|i, j, cell| {
                 let formula = f.get_value((j, i)).filter(|s| !s.is_empty());
@@ -197,7 +157,7 @@ Whether and when to show formulas
             }),
         },
         Err(e) => {
-            if formula_mode != FormulaMode::CachedValue {
+            if app.formula != FormulaMode::CachedValue {
                 eprintln!("Formula parsing error: {e:?}");
             }
             Box::new(|_, _, cell| cell)
@@ -206,8 +166,10 @@ Whether and when to show formulas
 
     let stdout = io::stdout();
     let mut out = csv::WriterBuilder::new()
-        .terminator(csv::Terminator::Any(rs))
-        .delimiter(fs)
+        .terminator(csv::Terminator::Any(separator_to_byte(
+            &app.record_separator,
+        )?))
+        .delimiter(separator_to_byte(&app.field_separator)?)
         .from_writer(stdout.lock());
 
     let mut contents = vec![String::new(); range.width()];
@@ -220,7 +182,7 @@ Whether and when to show formulas
                 DataType::Empty => (),
                 // don't go through fmt for strings
                 DataType::String(s) => cell.push_str(&s),
-                rest => write!(cell, "{}", rest)
+                rest => write!(cell, "{rest}")
                     .expect("formatting basic types to a string should never fail"),
             };
         }

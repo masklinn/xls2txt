@@ -2,7 +2,7 @@
 name = "xls2txt"
 description = "Command-line utility to convert stylesheets (ODS or excel) to text"
 readme = "README"
-version = "1.1.0"
+version = "1.2.0"
 authors = ["Masklinn <masklinn@masklinn.net>"]
 license = "Apache-2.0"
 
@@ -19,5 +19,5 @@ keywords = ["xls2csv", "xls2txt", "xls", "ods", "csv"] # up to 5
 [dependencies]
 calamine = "0.19.1"
 csv = "1.1"
-clap = { version = "4.0", features = ["cargo"] }
+clap = { version = "4.0", features = ["cargo", "derive"] }
 guard = "0.5.1"
