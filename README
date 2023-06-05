@@ -29,9 +29,9 @@ their default:
 
   `sheet` can be either the *name* of a sheet, or its position in the
   workbook (starting at 1, though 0 will be treated as 1).
-* `--record-separator` (`--rs`, `-r`) is the separator used between
+* `--record-separator` (`-r`) is the separator used between
   sheet rows, it defaults to a unix newline for both utilities.
-* `--field-separator` (`--fs`, `f`) is the separator used between
+* `--field-separator` (`f`) is the separator used between
   sheet cells, it defaults to a TAB character for `xsl2txt` and a
   COMMA for `xls2csv`.
 * `--formula` specifies the *formula display mode*:
