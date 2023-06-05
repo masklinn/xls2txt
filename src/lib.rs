@@ -80,10 +80,10 @@ struct App {
     #[arg(short, long, default_value = "1")]
     sheet: String,
     /// Record separator (a single character)
-    #[arg(short, long)]
+    #[arg(short, long, default_value_t)]
     record_separator: String,
     /// Field separator (a single character)
-    #[arg(short, long)]
+    #[arg(short, long, default_value_t)]
     field_separator: String,
     /// Whether and when to show formulas
     #[arg(long, value_enum, default_value_t = FormulaMode::CachedValue)]
